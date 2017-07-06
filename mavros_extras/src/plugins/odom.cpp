@@ -144,8 +144,8 @@ private:
 		lpos.x = pos_ned.x();
 		lpos.y = pos_ned.y();
 		lpos.z = pos_ned.z();
-		lpos.vx = lin_vel_ned.x();
-		lpos.vy = lin_vel_ned.y();
+		lpos.vx = lin_vel_ned.y();
+		lpos.vy = -lin_vel_ned.x();
 		lpos.vz = lin_vel_ned.z();
 		lpos.ax = zerov3f.x();
 		lpos.ay = zerov3f.y();
