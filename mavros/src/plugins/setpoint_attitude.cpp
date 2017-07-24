@@ -61,11 +61,11 @@ public:
 			tf2_start("AttitudeSpTF", &SetpointAttitudePlugin::transform_cb);
 		}
 		else {
-			twist_sub = sp_nh.subscribe("cmd_vel", 10, &SetpointAttitudePlugin::twist_cb, this);
-			pose_sub = sp_nh.subscribe("attitude", 10, &SetpointAttitudePlugin::pose_cb, this);
+			twist_sub = sp_nh.subscribe("cmd_vel", 1, &SetpointAttitudePlugin::twist_cb, this);
+			pose_sub = sp_nh.subscribe("attitude", 1, &SetpointAttitudePlugin::pose_cb, this);
 		}
 
-		throttle_sub = sp_nh.subscribe("att_throttle", 10, &SetpointAttitudePlugin::throttle_cb, this);
+		throttle_sub = sp_nh.subscribe("att_throttle", 1, &SetpointAttitudePlugin::throttle_cb, this);
 	}
 
 	Subscriptions get_subscriptions()
@@ -100,9 +100,7 @@ private:
 		 */
 		const uint8_t ignore_all_except_q = (1 << 6) | (7 << 0);
 
-		auto q = ftf::transform_orientation_enu_ned(
-					ftf::transform_orientation_baselink_aircraft(Eigen::Quaterniond(tr.rotation()))
-					);
+		auto q = Eigen::Quaterniond(tr.rotation());
 
 		set_attitude_target(stamp.toNSec() / 1000000,
 				ignore_all_except_q,
@@ -122,12 +120,10 @@ private:
 		 */
 		const uint8_t ignore_all_except_rpy = (1 << 7) | (1 << 6);
 
-		auto av = ftf::transform_frame_baselink_aircraft(ang_vel);
-
 		set_attitude_target(stamp.toNSec() / 1000000,
 				ignore_all_except_rpy,
 				Eigen::Quaterniond::Identity(),
-				av,
+				ang_vel,
 				0.0);
 	}
 

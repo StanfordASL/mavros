@@ -82,11 +82,11 @@ public:
 		setup_covariance(magnetic_cov, mag_stdev);
 		setup_covariance(unk_orientation_cov, 0.0);
 
-		imu_pub = imu_nh.advertise<sensor_msgs::Imu>("data", 10);
-		magn_pub = imu_nh.advertise<sensor_msgs::MagneticField>("mag", 10);
-		temp_pub = imu_nh.advertise<sensor_msgs::Temperature>("temperature", 10);
-		press_pub = imu_nh.advertise<sensor_msgs::FluidPressure>("atm_pressure", 10);
-		imu_raw_pub = imu_nh.advertise<sensor_msgs::Imu>("data_raw", 10);
+		imu_pub = imu_nh.advertise<sensor_msgs::Imu>("data", 1);
+		magn_pub = imu_nh.advertise<sensor_msgs::MagneticField>("mag", 1);
+		temp_pub = imu_nh.advertise<sensor_msgs::Temperature>("temperature", 1);
+		press_pub = imu_nh.advertise<sensor_msgs::FluidPressure>("atm_pressure", 1);
+		imu_raw_pub = imu_nh.advertise<sensor_msgs::Imu>("data_raw", 1);
 
 		// reset has_* flags on connection change
 		enable_connection_cb();
@@ -205,19 +205,11 @@ private:
 		if (has_att_quat)
 			return;
 
-		//Here we have rpy describing the rotation: aircraft->NED
-		//We need to change this to aircraft->ENU
-		//And finally change it to baselink->ENU
-		auto enu_baselink_orientation = ftf::transform_orientation_aircraft_baselink(
-				ftf::transform_orientation_ned_enu(
-					ftf::quaternion_from_rpy(att.roll, att.pitch, att.yaw)));
+		auto ned_orientation = ftf::quaternion_from_rpy(att.roll, att.pitch, att.yaw);
 
-		//Here we have the angular velocity expressed in the aircraft frame
-		//We need to apply the static rotation to get it into the base_link frame
-		auto gyro = ftf::transform_frame_aircraft_baselink(
-				Eigen::Vector3d(att.rollspeed, att.pitchspeed, att.yawspeed));
+		auto gyro = Eigen::Vector3d(att.rollspeed, att.pitchspeed, att.yawspeed);
 
-		publish_imu_data(att.time_boot_ms, enu_baselink_orientation, gyro);
+		publish_imu_data(att.time_boot_ms, ned_orientation, gyro);
 	}
 
 	// almost the same as handle_attitude(), but for ATTITUDE_QUATERNION
@@ -226,20 +218,11 @@ private:
 		ROS_INFO_COND_NAMED(!has_att_quat, "imu", "IMU: Attitude quaternion IMU detected!");
 		has_att_quat = true;
 
-		//MAVLink quaternion exactly matches Eigen convention
-		//Here we have rpy describing the rotation: aircraft->NED
-		//We need to change this to aircraft->ENU
-		//And finally change it to baselink->ENU
-		auto enu_baselink_orientation = ftf::transform_orientation_aircraft_baselink(
-				ftf::transform_orientation_ned_enu(
-					Eigen::Quaterniond(att_q.q1, att_q.q2, att_q.q3, att_q.q4)));
+		auto ned_orientation = Eigen::Quaterniond(att_q.q1, att_q.q2, att_q.q3, att_q.q4);
 
-		//Here we have the angular velocity expressed in the aircraft frame
-		//We need to apply the static rotation to get it into the base_link frame
-		auto gyro = ftf::transform_frame_aircraft_baselink(
-				Eigen::Vector3d(att_q.rollspeed, att_q.pitchspeed, att_q.yawspeed));
+		auto gyro = Eigen::Vector3d(att_q.rollspeed, att_q.pitchspeed, att_q.yawspeed);
 
-		publish_imu_data(att_q.time_boot_ms, enu_baselink_orientation, gyro);
+		publish_imu_data(att_q.time_boot_ms, ned_orientation, gyro);
 	}
 
 	void handle_highres_imu(const mavlink::mavlink_message_t *msg, mavlink::common::msg::HIGHRES_IMU &imu_hr)
@@ -253,8 +236,8 @@ private:
 		// accelerometer + gyroscope data available
 		// Data is expressed in aircraft frame we need to rotate to base_link frame
 		if (imu_hr.fields_updated & ((7 << 3) | (7 << 0))) {
-			auto gyro = ftf::transform_frame_aircraft_baselink(Eigen::Vector3d(imu_hr.xgyro, imu_hr.ygyro, imu_hr.zgyro));
-			auto accel = ftf::transform_frame_aircraft_baselink(Eigen::Vector3d(imu_hr.xacc, imu_hr.yacc, imu_hr.zacc));
+			auto gyro = Eigen::Vector3d(imu_hr.xgyro, imu_hr.ygyro, imu_hr.zgyro);
+			auto accel = Eigen::Vector3d(imu_hr.xacc, imu_hr.yacc, imu_hr.zacc);
 
 			publish_imu_data_raw(header, gyro, accel);
 		}
@@ -296,10 +279,9 @@ private:
 		auto header = m_uas->synchronized_header(frame_id, imu_raw.time_usec);
 
 		//! @note APM send SCALED_IMU data as RAW_IMU
-		auto gyro = ftf::transform_frame_aircraft_baselink<Eigen::Vector3d>(
-				Eigen::Vector3d(imu_raw.xgyro, imu_raw.ygyro, imu_raw.zgyro) * MILLIRS_TO_RADSEC);
-		auto accel = ftf::transform_frame_aircraft_baselink<Eigen::Vector3d>(
-				Eigen::Vector3d(imu_raw.xacc, imu_raw.yacc, imu_raw.zacc));
+		auto gyro = Eigen::Vector3d(imu_raw.xgyro, imu_raw.ygyro, imu_raw.zgyro);
+			gyro *= MILLIRS_TO_RADSEC;
+		auto accel = Eigen::Vector3d(imu_raw.xacc, imu_raw.yacc, imu_raw.zacc);
 
 		if (m_uas->is_ardupilotmega())
 			accel *= MILLIG_TO_MS2;
@@ -313,8 +295,8 @@ private:
 		}
 
 		/* -*- magnetic vector -*- */
-		auto mag_field = ftf::transform_frame_aircraft_baselink<Eigen::Vector3d>(
-				Eigen::Vector3d(imu_raw.xmag, imu_raw.ymag, imu_raw.zmag) * MILLIT_TO_TESLA);
+		auto mag_field = Eigen::Vector3d(imu_raw.xmag, imu_raw.ymag, imu_raw.zmag);
+		 	mag_field *= MILLIT_TO_TESLA;
 
 		publish_mag(header, mag_field);
 	}
@@ -330,16 +312,16 @@ private:
 		auto imu_msg = boost::make_shared<sensor_msgs::Imu>();
 		auto header = m_uas->synchronized_header(frame_id, imu_raw.time_boot_ms);
 
-		auto gyro = ftf::transform_frame_aircraft_baselink<Eigen::Vector3d>(
-				Eigen::Vector3d(imu_raw.xgyro, imu_raw.ygyro, imu_raw.zgyro) * MILLIRS_TO_RADSEC);
-		auto accel = ftf::transform_frame_aircraft_baselink<Eigen::Vector3d>(
-				Eigen::Vector3d(imu_raw.xacc, imu_raw.yacc, imu_raw.zacc) * MILLIG_TO_MS2);
+		auto gyro = Eigen::Vector3d(imu_raw.xgyro, imu_raw.ygyro, imu_raw.zgyro);
+		 	gyro *= MILLIRS_TO_RADSEC;
+		auto accel = Eigen::Vector3d(imu_raw.xacc, imu_raw.yacc, imu_raw.zacc);
+			accel *= MILLIG_TO_MS2;
 
 		publish_imu_data_raw(header, gyro, accel);
 
 		/* -*- magnetic vector -*- */
-		auto mag_field = ftf::transform_frame_aircraft_baselink<Eigen::Vector3d>(
-				Eigen::Vector3d(imu_raw.xmag, imu_raw.ymag, imu_raw.zmag) * MILLIT_TO_TESLA);
+		auto mag_field = Eigen::Vector3d(imu_raw.xmag, imu_raw.ymag, imu_raw.zmag);
+			mag_field *= MILLIT_TO_TESLA;
 
 		publish_mag(header, mag_field);
 	}
@@ -374,4 +356,3 @@ private:
 
 #include <pluginlib/class_list_macros.h>
 PLUGINLIB_EXPORT_CLASS(mavros::std_plugins::IMUPubPlugin, mavros::plugin::PluginBase)
-
