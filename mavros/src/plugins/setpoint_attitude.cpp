@@ -186,10 +186,10 @@ private:
 		/**
 		 * && are lazy, is_normalized() should be called only if reverse_throttle are true.
 		 */
-		if (reverse_throttle && !is_normalized(throttle_normalized, -1.0, 1.0))
-			return;
-		else if (!is_normalized(throttle_normalized, 0.0, 1.0))
-			return;
+		// if (reverse_throttle && !is_normalized(throttle_normalized, -1.0, 1.0))
+		// 	return;
+		// else if (!is_normalized(throttle_normalized, 0.0, 1.0))
+		// 	return;
 
 		send_attitude_throttle(throttle_normalized);
 	}
